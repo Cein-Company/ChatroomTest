@@ -13,7 +13,7 @@ import static utils.ConsoleDetail.RED_BOLD_BRIGHT;
 import static utils.ConsoleDetail.RESET;
 
 public class ChatClientHandler implements Runnable {
-    public static ArrayList<ChatClientHandler> clients = new ArrayList<>();
+    private static final ArrayList<ChatClientHandler> clients = new ArrayList<>();
 
     private Socket socket;
     private BufferedReader bufferedReader;
@@ -40,7 +40,7 @@ public class ChatClientHandler implements Runnable {
             saveMessages(enteredChatMessage);
 
             System.out.println(enteredChatMessage);
-            broadcastMessage(enteredChatMessage);
+            broadcastMessageToAll(enteredChatMessage);
         } catch (IOException e) {
             closeEverything(socket, bufferedReader, bufferedWriter);
         }
@@ -50,35 +50,34 @@ public class ChatClientHandler implements Runnable {
     public void run() {
         String messageFromClient;
 
-        while (socket.isConnected()) {
+        while (ChatServer.isServerOn() && socket.isConnected()) {
             try {
-                messageFromClient = bufferedReader.readLine();
+                if (ChatServer.isServerOn() && bufferedReader.ready()) {
+                    messageFromClient = bufferedReader.readLine();
 
-                if (messageFromClient != null && messageFromClient.length() != 0) {
-                    if (messageFromClient.charAt(messageFromClient.indexOf(": ") + 13) == '/') {
-                        String commandRespond = CommandHandlerClient.commandHandler(messageFromClient);
+                    if (messageFromClient != null && messageFromClient.length() != 0) {
+                        if (messageFromClient.charAt(messageFromClient.indexOf(": ") + 13) == '/') {
+                            String commandRespond = CommandHandlerClient.commandHandler(messageFromClient);
 
-                        if (commandRespond.contains("SERVER: ")) {
-                            sendMessageToClient(commandRespond);
-                        } else {
-                            String[] arr = commandRespond.split(" ", 2);
+                            if (commandRespond.contains("SERVER: ")) {
+                                sendMessageToClient(commandRespond);
+                            } else {
+                                String[] arr = commandRespond.split(" ", 2);
 
-                            String target = arr[0];
-                            String messageToBeSent = arr[1];
+                                String target = arr[0];
+                                String messageToBeSent = arr[1];
 
-                            if (target.equals("server"))
-                                System.out.println(messageToBeSent);
-                            else
                                 messagingAClient(target, messageToBeSent);
+                            }
+                        } else {
+                            if (messageFromClient.contains("has left the chatroom"))
+                                closeEverything(socket, bufferedReader, bufferedWriter);
+
+                            saveMessages(messageFromClient);
+
+                            System.out.println(messageFromClient);
+                            broadcastMessageToOthers(messageFromClient);
                         }
-                    } else {
-                        saveMessages(messageFromClient);
-
-                        if (messageFromClient.contains("has left the chatroom"))
-                            closeEverything(socket, bufferedReader, bufferedWriter);
-
-                        System.out.println(messageFromClient);
-                        broadcastMessage(messageFromClient);
                     }
                 }
             } catch (IOException e) {
@@ -88,7 +87,20 @@ public class ChatClientHandler implements Runnable {
         }
     }
 
-    public void broadcastMessage(String messageToSend) {
+    public void broadcastMessageToAll(String messageToSend) {
+        for (ChatClientHandler client : clients) {
+            try {
+                client.getBufferedWriter().write(messageToSend);
+                client.getBufferedWriter().newLine();
+                client.getBufferedWriter().flush();
+            } catch (IOException e) {
+                closeEverything(socket, bufferedReader, bufferedWriter);
+                break;
+            }
+        }
+    }
+
+    public void broadcastMessageToOthers(String messageToSend) {
         for (ChatClientHandler client : clients) {
             try {
                 if (!client.equals(this)) {
@@ -114,6 +126,11 @@ public class ChatClientHandler implements Runnable {
     }
 
     public void messagingAClient(String clientUsername, String messageToSend) {
+        if (clientUsername.equals("server")) {
+            System.out.println(messageToSend);
+            return;
+        }
+
         for (ChatClientHandler client : clients) {
             try {
                 if (client.clientModel.getColoredUsername().equals(clientUsername)) {
@@ -139,8 +156,10 @@ public class ChatClientHandler implements Runnable {
         removeClientHandler();
 
         if (!ChatServer.isServerOn()) {
+            String shutdownMessage = RED_BOLD_BRIGHT + "SERVER WAS SHUTDOWN BY THE ADMINISTRATOR." + RESET;
+
             try {
-                bufferedWriter.write("SERVER SHUTDOWN");
+                bufferedWriter.write(shutdownMessage);
                 bufferedWriter.newLine();
                 bufferedWriter.flush();
             } catch (IOException e) {
@@ -206,5 +225,9 @@ public class ChatClientHandler implements Runnable {
 
     public ClientModel getClientModel() {
         return clientModel;
+    }
+
+    public static ArrayList<ChatClientHandler> getClients() {
+        return clients;
     }
 }

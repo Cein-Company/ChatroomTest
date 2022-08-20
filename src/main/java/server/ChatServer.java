@@ -15,14 +15,16 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Scanner;
 
-import static server.ChatClientHandler.clients;
+import static server.ChatClientHandler.getClients;
 import static server.commandserver.ServerCommandHelp.helpCommand;
 import static utils.ConsoleDetail.*;
 
 public class ChatServer {
-
     private static final ArrayList<String> chatMessages = new ArrayList<>();
     private static ServerConfig config;
     private static ServerSocket serverSocket;
@@ -34,13 +36,16 @@ public class ChatServer {
     public static void startServer() {
         serverOn = true;
 
+        String turnOnMessage = RED_BOLD_BRIGHT + "SERVER CONNECTED!" + RESET;
+        saveMessages(turnOnMessage);
+
         System.out.println(RED_BOLD_BRIGHT + "SERVER CONNECTED!\n" +
                 "Type '/help' to see a list of available commands.\n" +
                 "Type '/exit' to close the server." + RESET);
         listenForServerCommands();
 
         try {
-            while (!serverSocket.isClosed()) {
+            while (isServerOn() && !serverSocket.isClosed()) {
                 Socket socket = serverSocket.accept();
                 System.out.println(CYAN_BOLD_BRIGHT + "NEW USER CONNECTED!" + RESET);
                 ChatClientHandler client = new ChatClientHandler(socket);
@@ -48,7 +53,8 @@ public class ChatServer {
                 thread.start();
             }
         } catch (IOException e) {
-            closeServerSocket();
+            if (isServerOn())
+                closeServerSocket();
         }
     }
 
@@ -57,7 +63,7 @@ public class ChatServer {
             String scannedCommands;
             Scanner scanner = new Scanner(System.in);
 
-            while (!serverSocket.isClosed()) {
+            while (isServerOn() && !serverSocket.isClosed()) {
                 if (scanner.hasNext()) {
                     scannedCommands = scanner.nextLine();
                     System.out.println(CommandHandlerServer.commandHandler(scannedCommands));
@@ -70,8 +76,11 @@ public class ChatServer {
     public static void closeServerSocket() {
         serverOn = false;
 
+        String shutdownMessage = RED_BOLD_BRIGHT + "SERVER WAS CLOSED BY THE ADMINISTRATOR." + RESET;
+        saveMessages(shutdownMessage);
+
         try {
-            ArrayList<ChatClientHandler> tempClients = new ArrayList<>(clients);
+            ArrayList<ChatClientHandler> tempClients = new ArrayList<>(getClients());
             for (ChatClientHandler client : tempClients)
                 client.closeEverything(client.getSocket(), client.getBufferedReader(), client.getBufferedWriter());
 
@@ -111,6 +120,17 @@ public class ChatServer {
         if (config == null)
             configServer();
         serverSocket = new ServerSocket(config.getPort());
+    }
+
+    public static void saveMessages(String messageToSave) {
+        ArrayList<String> tempMessages = ChatMessagesFiles.readChatMessages();
+        if (tempMessages != null) {
+            ChatServer.getChatMessages().clear();
+            ChatServer.getChatMessages().addAll(tempMessages);
+        }
+
+        ChatServer.getChatMessages().add(messageToSave);
+        ChatMessagesFiles.writeChatMessages(ChatServer.getChatMessages());
     }
 
     public static void main(String[] args) {
@@ -300,7 +320,5 @@ public class ChatServer {
         }
 
     }
-
-
 }
 

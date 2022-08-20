@@ -5,7 +5,7 @@ import server.ChatClientHandler;
 import java.util.ArrayList;
 
 import static client.ChatClientCLI.*;
-import static server.ChatClientHandler.clients;
+import static server.ChatClientHandler.getClients;
 import static server.commandserver.ServerCommandHelp.*;
 import static utils.ConsoleDetail.*;
 import static utils.ConsoleDetail.RESET;
@@ -19,10 +19,10 @@ public class ServerCommandKick {
             if (getActiveUsersFromFile().contains(kickedUser)) {
                 kickedUserColoredUsername = getUsersFromFile().get(kickedUser).getColoredUsername();
 
-                for (ChatClientHandler client : clients)
+                for (ChatClientHandler client : getClients())
                     if (client.getClientModel().getUsername().equals(kickedUser)) {
                         client.sendMessageToClient("You were kicked out from the chatroom.");
-                        client.broadcastMessage(
+                        client.broadcastMessageToOthers(
                                 RED_BOLD_BRIGHT + "SERVER: " + RESET +
                                         kickedUserColoredUsername +
                                         RED_BOLD_BRIGHT + " was kicked out from the chatroom." + RESET);
@@ -42,7 +42,7 @@ public class ServerCommandKick {
     }
 
     protected static void kick(String kickedUser) {
-        ArrayList<ChatClientHandler> tempClients = new ArrayList<>(clients);
+        ArrayList<ChatClientHandler> tempClients = new ArrayList<>(getClients());
         for (ChatClientHandler client : tempClients)
             if (client.getClientModel().getUsername().equals(kickedUser))
                 client.closeEverything(client.getSocket(), client.getBufferedReader(), client.getBufferedWriter());

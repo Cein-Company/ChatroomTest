@@ -13,9 +13,10 @@ import static utils.ConsoleDetail.*;
 public class ServerCommandLog {
     protected static String logCommand(String[] commandTokens) {
         String[] log = new String[1];
-        ChatMessagesFiles.readChatMessages().forEach(m -> {
-            if (m != null)
-                log[0] += m + "\n";
+        log[0] = "";
+        ChatMessagesFiles.readChatMessages().forEach(message -> {
+            if (message != null)
+                log[0] += message + "\n";
         });
 
         if (commandTokens.length == 3 && commandTokens[1].toLowerCase(Locale.ROOT).equals("-s")) {

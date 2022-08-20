@@ -7,7 +7,7 @@ import java.util.Locale;
 
 import static client.ChatClientCLI.getActiveUsersFromFile;
 import static client.ChatClientCLI.getUsersFromFile;
-import static server.ChatClientHandler.clients;
+import static server.ChatClientHandler.getClients;
 import static server.commandserver.ServerCommandHelp.banCmd;
 import static server.commandserver.ServerCommandHelp.indicator;
 import static utils.ConsoleDetail.RED_BOLD_BRIGHT;
@@ -22,10 +22,10 @@ public class ServerCommandBan {
             if (getActiveUsersFromFile().contains(bannedUser)) {
                 bannedUserColoredUsername = getUsersFromFile().get(bannedUser).getColoredUsername();
 
-                for (ChatClientHandler client : clients)
+                for (ChatClientHandler client : getClients())
                     if (client.getClientModel().getUsername().equals(bannedUser)) {
                         client.sendMessageToClient("You were kicked out & banned from the chatroom forever.");
-                        client.broadcastMessage(
+                        client.broadcastMessageToOthers(
                                 RED_BOLD_BRIGHT + "SERVER: " + RESET +
                                         bannedUserColoredUsername +
                                         RED_BOLD_BRIGHT + " was kicked out & banned from the chatroom forever." + RESET);
@@ -38,10 +38,10 @@ public class ServerCommandBan {
             } else if (getUsersFromFile().containsKey(bannedUser)) {
                 bannedUserColoredUsername = getUsersFromFile().get(bannedUser).getColoredUsername();
 
-                for (ChatClientHandler client : clients)
+                for (ChatClientHandler client : getClients())
                     if (client.getClientModel().getUsername().equals(bannedUser)) {
                         client.sendMessageToClient("You were banned from the chatroom forever.");
-                        client.broadcastMessage(
+                        client.broadcastMessageToOthers(
                                 RED_BOLD_BRIGHT + "SERVER: " + RESET +
                                         bannedUserColoredUsername +
                                         RED_BOLD_BRIGHT + " was banned from the chatroom forever." + RESET);
