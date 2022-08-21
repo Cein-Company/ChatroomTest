@@ -76,7 +76,6 @@ public class ConsoleDetail {
     public static final String CYAN_BACKGROUND_BRIGHT = "\033[0;106m";  // CYAN
     public static final String WHITE_BACKGROUND_BRIGHT = "\033[0;107m";   // WHITE
 
-    public static SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
     public static final String[] BOLD_BRIGHTS_COLORS = {
             "\033[1;90m",  // BLACK
             "\033[1;93m",  // YELLOW
@@ -84,4 +83,6 @@ public class ConsoleDetail {
             "\033[1;95m",  // PURPLE
             "\033[1;96m",  // CYAN
     };
+
+    public static SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
 }

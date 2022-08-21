@@ -1,50 +1,71 @@
 package server.commandserver;
 
+import client.ChatClient;
+import client.models.ClientModel;
+import files.MyActiveUsersFiles;
+import files.MyUsersFiles;
 import server.ChatClientHandler;
+import server.models.ServerMessageMode;
+import server.models.ServerMessageModel;
 
 import java.util.ArrayList;
 
-import static client.ChatClientCLI.*;
-import static server.ChatClientHandler.getClients;
-import static server.commandserver.ServerCommandHelp.*;
-import static utils.ConsoleDetail.*;
-import static utils.ConsoleDetail.RESET;
+import static server.ChatClientHandler.getClientHandlers;
 
 public class ServerCommandKick {
-    protected static String kickCommand(String[] commandTokens) {
+    protected static ServerMessageModel kickCommand(String[] commandTokens) {
         if (commandTokens.length == 2) {
             String kickedUser = commandTokens[1];
-            String kickedUserColoredUsername;
+            ClientModel kickedUserModel;
 
-            if (getActiveUsersFromFile().contains(kickedUser)) {
-                kickedUserColoredUsername = getUsersFromFile().get(kickedUser).getColoredUsername();
+            if (MyActiveUsersFiles.contains(kickedUser)) {
+                kickedUserModel = MyUsersFiles.getUserByName(kickedUser);
 
-                for (ChatClientHandler client : getClients())
-                    if (client.getClientModel().getUsername().equals(kickedUser)) {
-                        client.sendMessageToClient("You were kicked out from the chatroom.");
-                        client.broadcastMessageToOthers(
-                                RED_BOLD_BRIGHT + "SERVER: " + RESET +
-                                        kickedUserColoredUsername +
-                                        RED_BOLD_BRIGHT + " was kicked out from the chatroom." + RESET);
+                ChatClientHandler chatClientHandler = null;
+                for (ChatClientHandler client : getClientHandlers())
+                    if (client.getClientUsername().equals(kickedUserModel.getUsername())) {
+                        chatClientHandler = client;
                     }
 
-                kick(kickedUser);
-                return getUsersFromFile().get(kickedUser).getColoredUsername() + RED_BOLD_BRIGHT + " was kicked out from the server." + RESET;
-            } else if (getUsersFromFile().containsKey(kickedUser)) {
-                kickedUserColoredUsername = getUsersFromFile().get(kickedUser).getColoredUsername();
+                if (chatClientHandler != null) {
+                    chatClientHandler.sendMessageToClient(getUserKickedMsg());
+                    chatClientHandler.broadcastMessageToOthers(getUserKickedMsgToAll(kickedUserModel));
+                }
 
-                return kickedUserColoredUsername + RED_BOLD_BRIGHT + " is not online at the moment." + RESET;
-            } else {
-                return RED_BOLD_BRIGHT + "No such user was found." + RESET;
-            }
+                kick(kickedUserModel);
+                return getUserKickedMsgToAll(kickedUserModel);
+            } else if (MyUsersFiles.contains(kickedUser))
+                return getNotOnline(MyUsersFiles.getUserByName(kickedUser));
+            else
+                return getUserNotFoundMsg();
         } else
-            return RED_BOLD_BRIGHT + "Please Use the /kick command correctly.\n" + RESET + indicator + kickCmd;
+            return getInvalidKickCommandMsg();
     }
 
-    protected static void kick(String kickedUser) {
-        ArrayList<ChatClientHandler> tempClients = new ArrayList<>(getClients());
+    protected static void kick(ClientModel kickedUser) {
+        ArrayList<ChatClientHandler> tempClients = new ArrayList<>(getClientHandlers());
         for (ChatClientHandler client : tempClients)
-            if (client.getClientModel().getUsername().equals(kickedUser))
-                client.closeEverything(client.getSocket(), client.getBufferedReader(), client.getBufferedWriter());
+            if (client.getClientModel().getUsername().equals(kickedUser.getUsername()))
+                client.closeEverything();
+    }
+
+    private static ServerMessageModel getUserKickedMsg() {
+        return new ServerMessageModel(ServerMessageMode.ServerKickMsg,"You were kicked out from the chatroom.");
+    }
+
+    private static ServerMessageModel getUserKickedMsgToAll(ClientModel kickedUserModel) {
+         return new ServerMessageModel(ServerMessageMode.FromServerAboutClient, kickedUserModel, " was kicked out from the chatroom.");
+    }
+
+    private static ServerMessageModel getNotOnline(ClientModel kickedUser) {
+        return new ServerMessageModel(ServerMessageMode.FromServerAboutClient, kickedUser, " is not online at the moment.");
+    }
+
+    private static ServerMessageModel getUserNotFoundMsg() {
+        return new ServerMessageModel(ServerMessageMode.ToAdminister,"No such user was found in the server.");
+    }
+
+    private static ServerMessageModel getInvalidKickCommandMsg() {
+        return new ServerMessageModel(ServerMessageMode.ToAdminister,"Please Use the /kick command correctly.");
     }
 }

@@ -1,13 +1,18 @@
 package server.commandserver;
 
 import server.ChatServer;
+import server.models.ServerMessageMode;
+import server.models.ServerMessageModel;
 
 import java.util.Locale;
 
-import static utils.ConsoleDetail.*;
-
 public class CommandHandlerServer {
-    public static String commandHandler(String serverMessage) {
+    private static final ServerMessageModel serverInvalidMsgModel =
+            new ServerMessageModel(ServerMessageMode.ToAdminister, "Invalid Command.");
+    private static final ServerMessageModel serverExitMsg =
+            new ServerMessageModel(ServerMessageMode.ToAdminister, "You have closed the Sever");
+
+    public static ServerMessageModel commandHandler(String serverMessage) {
         String[] commandTokens = serverMessage.split("\\s+");
 
         switch (commandTokens[0].toLowerCase(Locale.ROOT)) {
@@ -27,9 +32,9 @@ public class CommandHandlerServer {
                 // Poll
             case "/exit":
                 ChatServer.closeServerSocket();
-                return RED_BOLD_BRIGHT + "You have closed the Sever." + RESET;
+                return serverExitMsg;
             default:
-                return RED_BOLD_BRIGHT + "INVALID COMMAND" + RESET;
+                return serverInvalidMsgModel;
         }
     }
 }

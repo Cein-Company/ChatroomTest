@@ -1,167 +1,178 @@
 package server;
 
-import client.ClientModel;
-import files.ChatMessagesFiles;
+import client.models.ClientMessageModel;
+import client.models.ClientModel;
+import files.MyMessagesFiles;
 import server.commandclient.CommandHandlerClient;
+import server.models.ServerMessageMode;
+import server.models.ServerMessageModel;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
 
-import static client.ChatClientCLI.getUsersFromFile;
-import static utils.ConsoleDetail.RED_BOLD_BRIGHT;
-import static utils.ConsoleDetail.RESET;
+import static server.ChatServer.isServerOn;
 
 public class ChatClientHandler implements Runnable {
-    private static final ArrayList<ChatClientHandler> clients = new ArrayList<>();
+    private static final ArrayList<ChatClientHandler> clientHandlers = new ArrayList<>();
 
     private Socket socket;
-    private BufferedReader bufferedReader;
-    private BufferedWriter bufferedWriter;
+
+    private ObjectInputStream objectInputStream;
+    private ObjectOutputStream objectOutputStream;
+
+    private String clientUsername;
     private ClientModel clientModel;
 
     public ChatClientHandler(Socket socket) {
         try {
             this.socket = socket;
-            this.bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            this.bufferedWriter = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            this.objectInputStream = new ObjectInputStream(socket.getInputStream());
+            this.objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
 
-            String clientColoredUsername = bufferedReader.readLine();
-            for( ClientModel clientModel : getUsersFromFile().values())
-                if (clientModel.getColoredUsername().equals(clientColoredUsername))
-                    this.clientModel = clientModel;
+            this.clientModel = (ClientModel) objectInputStream.readObject();
+            this.clientUsername = clientModel.getUsername();
 
-            clients.add(this);
+            clientHandlers.add(this);
 
-            String enteredChatMessage = RED_BOLD_BRIGHT + "SERVER: " + RESET +
-                    clientModel.getColoredUsername() + RED_BOLD_BRIGHT + " has entered the chat." + RESET;
+            final String enteredChatMessage = " has entered the chat.";
 
-            readMessages();
-            saveMessages(enteredChatMessage);
+            ServerMessageModel enteredChatMsg =
+                    new ServerMessageModel(ServerMessageMode.FromServerAboutClient, clientModel, enteredChatMessage);
 
-            System.out.println(enteredChatMessage);
-            broadcastMessageToAll(enteredChatMessage);
+            showMessageHistoryToClient();
+            broadcastMessageToAll(enteredChatMsg);
         } catch (IOException e) {
-            closeEverything(socket, bufferedReader, bufferedWriter);
+            if (isServerOn())
+                closeEverything();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
         }
     }
 
     @Override
     public void run() {
-        String messageFromClient;
+        ClientMessageModel clientMessage;
 
-        while (ChatServer.isServerOn() && socket.isConnected()) {
+        while (isServerOn() && socket.isConnected()) {
             try {
-                if (ChatServer.isServerOn() && bufferedReader.ready()) {
-                    messageFromClient = bufferedReader.readLine();
+                if (isServerOn()) {
+                    clientMessage = (ClientMessageModel) objectInputStream.readObject();
 
-                    if (messageFromClient != null && messageFromClient.length() != 0) {
-                        if (messageFromClient.charAt(messageFromClient.indexOf(": ") + 13) == '/') {
-                            String commandRespond = CommandHandlerClient.commandHandler(messageFromClient);
+                    if (clientMessage != null) {
+                        if (clientMessage.isCommand()) {
+                            ServerMessageModel commandRespond =
+                                    CommandHandlerClient.commandHandler(this, clientMessage);
 
-                            if (commandRespond.contains("SERVER: ")) {
-                                sendMessageToClient(commandRespond);
-                            } else {
-                                String[] arr = commandRespond.split(" ", 2);
-
-                                String target = arr[0];
-                                String messageToBeSent = arr[1];
-
-                                messagingAClient(target, messageToBeSent);
-                            }
+                            messageHandling(commandRespond);
                         } else {
-                            if (messageFromClient.contains("has left the chatroom"))
-                                closeEverything(socket, bufferedReader, bufferedWriter);
+                            ServerMessageModel serverMessageModel =
+                                    new ServerMessageModel(ServerMessageMode.FromClient, clientMessage);
 
-                            saveMessages(messageFromClient);
-
-                            System.out.println(messageFromClient);
-                            broadcastMessageToOthers(messageFromClient);
+                            messageHandling(serverMessageModel);
                         }
                     }
                 }
             } catch (IOException e) {
-                closeEverything(socket, bufferedReader, bufferedWriter);
+                if (isServerOn())
+                    closeEverything();
                 break;
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
             }
         }
     }
 
-    public void broadcastMessageToAll(String messageToSend) {
-        for (ChatClientHandler client : clients) {
+    public void messageHandling(ServerMessageModel serverMessage) {
+        switch (serverMessage.getMessageMode()) {
+            case FromClient, FromServerAboutClient -> broadcastMessageToOthers(serverMessage);
+            case FromSerer, ListFromServer -> sendMessageToClient(serverMessage);
+            case PMFromClientToServer -> System.out.println(serverMessage.getFullMessage());
+            case PMFromClientToClient -> messagingAClient(serverMessage);
+            case ServerShutdownMsg -> closeEverything();
+        }
+    }
+
+    public void broadcastMessageToAll(ServerMessageModel serverMsgModelToSend) {
+        System.out.println(serverMsgModelToSend.getFullMessage());
+        MyMessagesFiles.save(serverMsgModelToSend);
+
+        for (ChatClientHandler client : clientHandlers) {
             try {
-                client.getBufferedWriter().write(messageToSend);
-                client.getBufferedWriter().newLine();
-                client.getBufferedWriter().flush();
+                client.getObjectOutputStream().writeObject(serverMsgModelToSend);
+                client.getObjectOutputStream().flush();
             } catch (IOException e) {
-                closeEverything(socket, bufferedReader, bufferedWriter);
+                if (isServerOn())
+                    closeEverything();
                 break;
             }
         }
     }
 
-    public void broadcastMessageToOthers(String messageToSend) {
-        for (ChatClientHandler client : clients) {
+    public void broadcastMessageToOthers(ServerMessageModel serverMsgModelToSend) {
+        System.out.println(serverMsgModelToSend.getFullMessage());
+        MyMessagesFiles.save(serverMsgModelToSend);
+
+        for (ChatClientHandler client : clientHandlers) {
             try {
                 if (!client.equals(this)) {
-                    client.getBufferedWriter().write(messageToSend);
-                    client.getBufferedWriter().newLine();
-                    client.getBufferedWriter().flush();
+                    client.getObjectOutputStream().writeObject(serverMsgModelToSend);
+                    client.getObjectOutputStream().flush();
                 }
             } catch (IOException e) {
-                closeEverything(socket, bufferedReader, bufferedWriter);
+                if (isServerOn())
+                    closeEverything();
                 break;
             }
         }
     }
 
-    public void sendMessageToClient(String messageToSend) {
+    public void sendMessageToClient(ServerMessageModel serverMsgModelToSend) {
         try {
-            bufferedWriter.write(messageToSend);
-            bufferedWriter.newLine();
-            bufferedWriter.flush();
+            objectOutputStream.writeObject(serverMsgModelToSend);
+            objectOutputStream.flush();
         } catch (IOException e) {
-            closeEverything(socket, bufferedReader, bufferedWriter);
+            if (isServerOn())
+                closeEverything();
         }
     }
 
-    public void messagingAClient(String clientUsername, String messageToSend) {
-        if (clientUsername.equals("server")) {
-            System.out.println(messageToSend);
-            return;
-        }
-
-        for (ChatClientHandler client : clients) {
+    public void messagingAClient(ServerMessageModel serverMsgModelToSend) {
+        for (ChatClientHandler client : clientHandlers) {
             try {
-                if (client.clientModel.getColoredUsername().equals(clientUsername)) {
-                    client.getBufferedWriter().write(messageToSend);
-                    client.getBufferedWriter().newLine();
-                    client.getBufferedWriter().flush();
+                if (client.getClientUsername().equals(serverMsgModelToSend.getClientModelReceiver().getUsername())) {
+                    client.getObjectOutputStream().writeObject(serverMsgModelToSend);
+                    client.getObjectOutputStream().flush();
                     break;
                 }
             } catch (IOException e) {
-                closeEverything(socket, bufferedReader, bufferedWriter);
+                if (isServerOn())
+                    closeEverything();
                 break;
             }
         }
     }
 
-    public void removeClientHandler() {
-        clients.remove(this);
-        //        broadcastMessage(RED_BOLD_BRIGHT + "SERVER: " + RESET +
-        //                clientUsername + RED_BOLD_BRIGHT + " has left the chat." + RESET);
+    private void showMessageHistoryToClient() {
+        StringBuilder tempMessages = new StringBuilder();
+        for (ServerMessageModel message : MyMessagesFiles.getAllMessagesDuplicate())
+            tempMessages.append(message.getFullMessage()).append("\n");
+
+        sendMessageToClient(new ServerMessageModel(ServerMessageMode.ListFromServer, tempMessages.toString()));
     }
 
-    public void closeEverything(Socket socket, BufferedReader bufferedReader, BufferedWriter bufferedWriter) {
-        removeClientHandler();
+    public void closeEverything() {
+        clientHandlers.remove(this);
 
-        if (!ChatServer.isServerOn()) {
-            String shutdownMessage = RED_BOLD_BRIGHT + "SERVER WAS SHUTDOWN BY THE ADMINISTRATOR." + RESET;
+        if (!isServerOn()) {
+            ServerMessageModel shutdownMessage =
+                    new ServerMessageModel(ServerMessageMode.ServerShutdownMsg, "SERVER WAS SHUTDOWN BY THE ADMINISTRATOR.");
 
             try {
-                bufferedWriter.write(shutdownMessage);
-                bufferedWriter.newLine();
-                bufferedWriter.flush();
+                objectOutputStream.writeObject(shutdownMessage);
+                objectOutputStream.flush();
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -171,43 +182,13 @@ public class ChatClientHandler implements Runnable {
             if (socket != null)
                 socket.close();
 
-            if (bufferedWriter != null)
-                bufferedWriter.close();
+            if (objectOutputStream != null)
+                objectOutputStream.close();
 
-            if (bufferedReader != null)
-                bufferedReader.close();
+            if (objectInputStream != null)
+                objectInputStream.close();
         } catch (IOException e) {
             e.printStackTrace();
-        }
-    }
-
-    public void saveMessages(String messageToSave) {
-        ArrayList<String> tempMessages = ChatMessagesFiles.readChatMessages();
-        if (tempMessages != null) {
-            ChatServer.getChatMessages().clear();
-            ChatServer.getChatMessages().addAll(tempMessages);
-        }
-
-        ChatServer.getChatMessages().add(messageToSave);
-        ChatMessagesFiles.writeChatMessages(ChatServer.getChatMessages());
-    }
-
-    public void readMessages() {
-        ArrayList<String> tempMessages = ChatMessagesFiles.readChatMessages();
-        if (tempMessages != null) {
-            ChatServer.getChatMessages().clear();
-            ChatServer.getChatMessages().addAll(tempMessages);
-        }
-
-        for (String oldMessage : ChatServer.getChatMessages()) {
-            try {
-                bufferedWriter.write(oldMessage);
-                bufferedWriter.newLine();
-                bufferedWriter.flush();
-            } catch (IOException e) {
-                closeEverything(socket, bufferedReader, bufferedWriter);
-                break;
-            }
         }
     }
 
@@ -215,19 +196,23 @@ public class ChatClientHandler implements Runnable {
         return socket;
     }
 
-    public BufferedReader getBufferedReader() {
-        return bufferedReader;
+    public ObjectInputStream getObjectInputStream() {
+        return objectInputStream;
     }
 
-    public BufferedWriter getBufferedWriter() {
-        return bufferedWriter;
+    public ObjectOutputStream getObjectOutputStream() {
+        return objectOutputStream;
     }
 
     public ClientModel getClientModel() {
         return clientModel;
     }
 
-    public static ArrayList<ChatClientHandler> getClients() {
-        return clients;
+    public String getClientUsername() {
+        return clientUsername;
+    }
+
+    public static ArrayList<ChatClientHandler> getClientHandlers() {
+        return clientHandlers;
     }
 }

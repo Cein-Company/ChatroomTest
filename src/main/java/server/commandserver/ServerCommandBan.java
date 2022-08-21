@@ -1,68 +1,117 @@
 package server.commandserver;
 
-import client.ChatClientCLI;
+import client.models.ClientModel;
+import files.MyActiveUsersFiles;
+import files.MyUsersFiles;
 import server.ChatClientHandler;
+import server.models.ServerMessageMode;
+import server.models.ServerMessageModel;
 
 import java.util.Locale;
 
-import static client.ChatClientCLI.getActiveUsersFromFile;
-import static client.ChatClientCLI.getUsersFromFile;
-import static server.ChatClientHandler.getClients;
-import static server.commandserver.ServerCommandHelp.banCmd;
-import static server.commandserver.ServerCommandHelp.indicator;
-import static utils.ConsoleDetail.RED_BOLD_BRIGHT;
-import static utils.ConsoleDetail.RESET;
+import static server.ChatClientHandler.getClientHandlers;
 
 public class ServerCommandBan {
-    protected static String banCommand(String[] commandTokens) {
+    protected static ServerMessageModel banCommand(String[] commandTokens) {
         if (commandTokens.length == 2) {
             String bannedUser = commandTokens[1];
-            String bannedUserColoredUsername;
+            ClientModel bannedClientModel;
 
-            if (getActiveUsersFromFile().contains(bannedUser)) {
-                bannedUserColoredUsername = getUsersFromFile().get(bannedUser).getColoredUsername();
+            if (MyActiveUsersFiles.contains(bannedUser)) {
+                bannedClientModel = MyUsersFiles.getUserByName(bannedUser);
 
-                for (ChatClientHandler client : getClients())
-                    if (client.getClientModel().getUsername().equals(bannedUser)) {
-                        client.sendMessageToClient("You were kicked out & banned from the chatroom forever.");
-                        client.broadcastMessageToOthers(
-                                RED_BOLD_BRIGHT + "SERVER: " + RESET +
-                                        bannedUserColoredUsername +
-                                        RED_BOLD_BRIGHT + " was kicked out & banned from the chatroom forever." + RESET);
+                ChatClientHandler chatClientHandler = null;
+                for (ChatClientHandler client : getClientHandlers())
+                    if (client.getClientUsername().equals(bannedClientModel.getUsername())) {
+                        chatClientHandler = client;
                     }
 
-                ServerCommandKick.kick(bannedUser);
-                ban(bannedUser);
+                if (chatClientHandler != null) {
+                    bannedClientModel.setBanned(true);
+                    chatClientHandler.sendMessageToClient(getUserBanMsg());
+                    chatClientHandler.broadcastMessageToOthers(getUserBanMsgToAll(true, bannedClientModel));
+                }
 
-                return bannedUserColoredUsername + RED_BOLD_BRIGHT + " was kicked out & banned from the chatroom forever." + RESET;
-            } else if (getUsersFromFile().containsKey(bannedUser)) {
-                bannedUserColoredUsername = getUsersFromFile().get(bannedUser).getColoredUsername();
+                ServerCommandKick.kick(bannedClientModel);
 
-                for (ChatClientHandler client : getClients())
-                    if (client.getClientModel().getUsername().equals(bannedUser)) {
-                        client.sendMessageToClient("You were banned from the chatroom forever.");
-                        client.broadcastMessageToOthers(
-                                RED_BOLD_BRIGHT + "SERVER: " + RESET +
-                                        bannedUserColoredUsername +
-                                        RED_BOLD_BRIGHT + " was banned from the chatroom forever." + RESET);
+                MyUsersFiles.remove(bannedClientModel);
+                MyUsersFiles.save(bannedClientModel);
+
+                return getUserBanMsgToAll(true, bannedClientModel);
+            } else if (MyUsersFiles.contains(bannedUser)) {
+                bannedClientModel = MyUsersFiles.getUserByName(bannedUser);
+
+                if (bannedClientModel != null && !bannedClientModel.isBanned()) {
+                    // Just takes a random client to send the ban message to all clients
+                    for (ChatClientHandler client : getClientHandlers()) {
+                        client.broadcastMessageToAll(getUserBanMsgToAll(false, bannedClientModel));
+                        break;
                     }
 
-                ban(bannedUser);
-                return bannedUserColoredUsername + RED_BOLD_BRIGHT + " was banned from the chatroom forever." + RESET;
-            } else {
-                return RED_BOLD_BRIGHT + "No such user was found." + RESET;
-            }
+                    bannedClientModel.setBanned(true);
+
+                    MyUsersFiles.remove(bannedClientModel);
+                    MyUsersFiles.save(bannedClientModel);
+
+                    return getUserBanMsgToAll(false, bannedClientModel);
+                } else
+                    return getUserAlreadyBanned(bannedClientModel);
+            } else
+                return getUserNotFoundMsg();
         } else if (commandTokens.length == 3 && commandTokens[2].toLowerCase(Locale.ROOT).equals("-u")) {
-            String bannedUser = commandTokens[1];
-            ChatClientCLI.removeBannedUsers(bannedUser);
+            String unBannedUser = commandTokens[1];
+            if (MyUsersFiles.contains(unBannedUser)) {
+                ClientModel unBannedClientModel = MyUsersFiles.getUserByName(unBannedUser);;;
 
-            return RED_BOLD_BRIGHT + bannedUser + " was unbanned from the chatroom." + RESET;
+                if (unBannedClientModel != null && unBannedClientModel.isBanned()) {
+                    // Just takes a random client to send the unbanned message to all clients
+                    for (ChatClientHandler client : getClientHandlers()) {
+                        client.broadcastMessageToOthers(getUserUnBannedMsgToAll(unBannedClientModel));
+                        break;
+                    }
+
+                    unBannedClientModel.setBanned(false);
+
+                    MyUsersFiles.remove(unBannedClientModel);
+                    MyUsersFiles.save(unBannedClientModel);
+
+                    return getUserUnBannedMsgToAll(unBannedClientModel);
+                } else
+                    return getUseWasntBanned(unBannedClientModel);
+            } else
+                return getUserNotFoundMsg();
         } else
-            return RED_BOLD_BRIGHT + "Please Use the /ban command correctly.\n" + RESET + indicator + banCmd;
+            return getInvalidBanCommandMsg();
     }
 
-    private static void ban(String bannedUser) {
-        ChatClientCLI.removeUsers(bannedUser);
-        ChatClientCLI.addBannedUsers(bannedUser);
+    private static ServerMessageModel getUserBanMsg() {
+        return new ServerMessageModel(ServerMessageMode.ServerKickMsg, "You were kicked out & banned from the chatroom forever.");
+    }
+
+    private static ServerMessageModel getUserBanMsgToAll(boolean online, ClientModel bannedClientModel) {
+        if (online)
+            return new ServerMessageModel(ServerMessageMode.FromServerAboutClient, bannedClientModel, " was kicked out & banned from the chatroom forever.");
+        else
+            return new ServerMessageModel(ServerMessageMode.FromServerAboutClient, bannedClientModel, " was banned from the chatroom forever.");
+    }
+
+    private static ServerMessageModel getUserAlreadyBanned(ClientModel bannedClientModel) {
+        return new ServerMessageModel(ServerMessageMode.ToAdminister, bannedClientModel, " is already banned from the chatroom.");
+    }
+
+    private static ServerMessageModel getUserUnBannedMsgToAll(ClientModel unBannedClientModel) {
+        return new ServerMessageModel(ServerMessageMode.FromServerAboutClient, unBannedClientModel, " was unbanned from the chatroom.");
+    }
+
+    private static ServerMessageModel getUseWasntBanned(ClientModel bannedClientModel) {
+        return new ServerMessageModel(ServerMessageMode.ToAdminister, bannedClientModel, " wasn't banned from the chatroom.");
+    }
+
+    private static ServerMessageModel getUserNotFoundMsg() {
+        return new ServerMessageModel(ServerMessageMode.ToAdminister,"No such user was found in the server.");
+    }
+
+    private static ServerMessageModel getInvalidBanCommandMsg() {
+        return new ServerMessageModel(ServerMessageMode.ToAdminister,"Please Use the /ban command correctly.");
     }
 }

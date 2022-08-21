@@ -1,7 +1,9 @@
 package server.commandclient;
 
-import static client.ChatClientCLI.getUsers;
-import static client.ChatClientCLI.getUsersFromFile;
+import client.models.ClientMessageModel;
+import server.models.ServerMessageMode;
+import server.models.ServerMessageModel;
+
 import static utils.ConsoleDetail.*;
 
 public class ClientCommandHelp {
@@ -19,19 +21,25 @@ public class ClientCommandHelp {
     protected static final String pollDenyDescription = WHITE_BOLD_BRIGHT + "To deny joining a poll" + RESET;
 
 
-    protected static String helpCommand(String clientUsername, String[] commandTokens) {
+    protected static ServerMessageModel helpCommand(String[] commandTokens) {
         if (commandTokens.length == 1) {
-            String target = getUsersFromFile().get(clientUsername).getColoredUsername();
-
-            String messageToBeSent = WHITE_BOLD_BRIGHT + "Here's a list of available commands:" + RESET + "\n"
-                    + helpCmd + indicator + helpDescription + "\n"
-                    + messageUserCmd + indicator + messageUserDescription + "\n"
-                    + messageServerCmd + indicator + messageServerDescription + "\n"
-                    + pollJoinCmd + indicator + pollJoinDescription + "\n"
-                    + pollDenyCmd + indicator + pollDenyDescription + "\n";
-
-            return target + " " + messageToBeSent;
+            return getHelpList();
         } else
-            return RED_BOLD_BRIGHT + "SERVER: Please Use the /help command correctly.\n" + RESET + indicator + helpCmd;
+            return getInvalidHelpCommandMsg();
+    }
+
+    private static String helpList() {
+        return WHITE_BOLD_BRIGHT + "Here's a list of available commands:" + RESET + "\n\n"
+                + helpCmd + indicator + helpDescription + "\n"
+                + messageUserCmd + indicator + messageUserDescription + "\n"
+                + messageServerCmd + indicator + messageServerDescription + "\n";
+    }
+
+    private static ServerMessageModel getHelpList() {
+        return new ServerMessageModel(ServerMessageMode.ListFromServer, helpList());
+    }
+
+    private static ServerMessageModel getInvalidHelpCommandMsg() {
+        return new ServerMessageModel(ServerMessageMode.FromSerer,"Please Use the /help command correctly.");
     }
 }

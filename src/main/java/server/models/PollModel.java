@@ -1,6 +1,6 @@
-package server.features;
+package server.models;
 
-import client.ClientModel;
+import client.models.ClientModel;
 
 import java.util.*;
 
