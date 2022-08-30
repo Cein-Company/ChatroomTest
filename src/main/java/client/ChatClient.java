@@ -11,6 +11,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Locale;
 import java.util.Scanner;
 
@@ -172,6 +173,8 @@ public class ChatClient {
 
     public void closeEverything() {
         MyActiveUsersFiles.remove(client.getUsername());
+        client.setOnline(false);
+        client.setLastLogin(new Date());
         chatClients.remove(this);
 
         try {

@@ -5,10 +5,12 @@ import client.models.ClientModel;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.UUID;
 
 import static utils.ConsoleDetail.*;
 
 public class ServerMessageModel implements Serializable {
+    private final UUID messageID;
     private final String message;
     private String coloredMessage;
 
@@ -22,6 +24,8 @@ public class ServerMessageModel implements Serializable {
     private String messageTimeColored;
 
     public ServerMessageModel(ServerMessageMode messageMode, String message) {
+        this.messageID = UUID.randomUUID();
+
         this.messageMode = messageMode;
 
         if (messageMode.equals(ServerMessageMode.ListFromServer)) {
@@ -35,6 +39,8 @@ public class ServerMessageModel implements Serializable {
     }
 
     public ServerMessageModel(ServerMessageMode messageMode, ClientMessageModel clientMessageModel) {
+        this.messageID = UUID.randomUUID();
+
         this.messageMode = messageMode;
 
         this.message = clientMessageModel.getMessage();
@@ -45,6 +51,8 @@ public class ServerMessageModel implements Serializable {
     }
 
     public ServerMessageModel(ServerMessageMode messageMode, ClientModel clientModelReceiver, ClientMessageModel clientMessageModel) {
+        this.messageID = UUID.randomUUID();
+
         this.message = clientMessageModel.getMessage();
         this.coloredMessage = clientMessageModel.getColoredMessage();
         this.clientModelSender = clientMessageModel.getSender();
@@ -56,6 +64,8 @@ public class ServerMessageModel implements Serializable {
     }
 
     public ServerMessageModel(ServerMessageMode messageMode, ClientMessageModel clientMessageModel, ClientModel clientModelReceiver, String message) {
+        this.messageID = UUID.randomUUID();
+
         this.messageMode = messageMode;
 
         this.message = message;
@@ -67,6 +77,8 @@ public class ServerMessageModel implements Serializable {
     }
 
     public ServerMessageModel(ServerMessageMode messageMode, ClientModel aboutClient, String message) {
+        this.messageID = UUID.randomUUID();
+
         this.message = message;
         this.coloredMessage = RED_BOLD_BRIGHT + this.message + RESET;
         this.client = aboutClient;
@@ -77,6 +89,8 @@ public class ServerMessageModel implements Serializable {
     }
 
     public ServerMessageModel(ServerMessageMode messageMode, ClientMessageModel clientMessageModel, String message) {
+        this.messageID = UUID.randomUUID();
+
         this.message = message;
         this.coloredMessage = RED_BOLD_BRIGHT + this.message + RESET;
         this.clientModelSender = clientMessageModel.getSender();
@@ -84,6 +98,37 @@ public class ServerMessageModel implements Serializable {
         this.messageTimeColored = clientMessageModel.getMessageTimeColored();
 
         this.messageMode = messageMode;
+    }
+
+    public ServerMessageModel(ServerMessageMode messageMode,
+                              UUID messageID,
+                              String message,
+                              ClientModel client,
+                              ClientModel clientModelSender,
+                              ClientModel clientModelReceiver,
+                              String messageTime) {
+        this.messageMode = messageMode;
+        this.messageID = messageID;
+        this.message = message;
+
+        switch (messageMode) {
+            case FromClient -> this.coloredMessage = WHITE_BOLD_BRIGHT + this.message + RESET;
+            case FromSerer,
+                    PMFromClientToServer,
+                    PMFromClientToClient,
+                    FromServerAboutClient,
+                    ToAdminister,
+                    SignInteract,
+                    ServerShutdownMsg,
+                    ServerKickMsg -> this.coloredMessage = RED_BOLD_BRIGHT + this.message + RESET;
+            default -> this.coloredMessage = this.message;
+        }
+
+        this.client = client;
+        this.clientModelSender = clientModelSender;
+        this.clientModelReceiver = clientModelReceiver;
+        this.messageTime = messageTime;
+        this.messageTimeColored = WHITE_BOLD_BRIGHT + messageTime + RESET;
     }
 
     public String getFullMessage() {
@@ -148,7 +193,7 @@ public class ServerMessageModel implements Serializable {
                 return messageTime + indicator + PrivateAnnouncement + serverSender + colon + message;
             }
             default -> {
-                return "";
+                return "I heard a roar in the ServerMessageModel class!";
             }
         }
     }
@@ -183,6 +228,14 @@ public class ServerMessageModel implements Serializable {
 
     public void setClientModelReceiver(ClientModel clientModelReceiver) {
         this.clientModelReceiver = clientModelReceiver;
+    }
+
+    public UUID getMessageID() {
+        return messageID;
+    }
+
+    public ClientModel getClient() {
+        return client;
     }
 
     private String getCurrentTime() {

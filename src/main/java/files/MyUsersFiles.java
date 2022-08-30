@@ -27,17 +27,8 @@ public class MyUsersFiles extends Files {
         }
     }
 
-    public static ClientModel getUserByName(String username) {
-        ClientModel chosenClient = null;
-        for (ClientModel client : users.values()) {
-            if (client.getUsername().equals(username)) {
-                chosenClient = client;
-                break;
-            }
-        }
 
-        return chosenClient;
-    }
+
 
     public static void save(ClientModel client) {
         readUsers();
